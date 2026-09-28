@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GARRI DROP</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      background: #9ee914;
+      color: #111;
+      font-family: Arial, Helvetica, sans-serif;
+      display: flex;
+      justify-content: center;
+      padding: 20px 12px;
+    }
+
+    .game-wrap {
+      width: min(100%, 520px);
+    }
+
+    .top {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .stat {
+      flex: 1;
+      background: #fff;
+      border: 2px solid #111;
+      border-radius: 14px;
+      padding: 9px 8px;
+      text-align: center;
+    }
+
+    .label {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      color: #666;
+      text-transform: uppercase;
+    }
+
+    .value {
+      font-size: 21px;
+      font-weight: 900;
+      line-height: 1.1;
+      margin-top: 2px;
+    }
+
+    .arena {
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+      aspect-ratio: 9 / 14;
+      min-height: 440px;
+      max-height: 650px;
+      background: #0b7a3b;
+      border: 3px solid #111;
+      border-radius: 22px;
+      touch-action: manipulation;
+      user-select: none;
+    }
+
+    .item {
+      position: absolute;
+      top: -70px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 62px;
+      height: 62px;
+      border-radius: 18px;
+      font-size: 35px;
+      cursor: pointer;
+      z-index: 3;
+      filter: drop-shadow(0 4px 2px rgba(0,0,0,.2));
+      will-change: transform;
+      transition: transform .08s;
+      overflow: hidden;
+    }
+
+    .item.garri {
+      background: #fff;
+      border: 3px solid #111;
+    }
+
+    .item.bad {
+      background: #ffd8d4;
+      border: 3px solid #b84c40;
+    }
+
+    .item.garri img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      pointer-events: none;
+    }
+
+    .title {
+      font-size: 28px;
+      font-weight: 950;
+      letter-spacing: -.04em;
+    }
+
+    .sub {
+      font-size: 13px;
+      color: #555;
+      margin-top: 3px;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(255,255,255,.86);
+      backdrop-filter: blur(4px);
+    }
+
+    .panel {
+      width: min(100%, 330px);
+      text-align: center;
+      background: #fff;
+      border: 2px solid #111;
+      border-radius: 22px;
+      padding: 26px 20px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 14px;
+      background: #111;
+      color: #fff;
+      font-weight: 900;
+      padding: 14px 22px;
+      font-size: 16px;
+      cursor: pointer;
+      min-height: 48px;
+    }
+
+    button:hover { transform: translateY(-1px); }
+    button:focus-visible { outline: 3px solid #0b7a3b; outline-offset: 3px; }
+
+    .hidden { display: none; }
+    .hearts { letter-spacing: 2px; }
+
+    .flash {
+      position: absolute;
+      inset: 0;
+      z-index: 8;
+      pointer-events: none;
+      background: rgba(217, 40, 40, .25);
+      opacity: 0;
+    }
+
+    .flash.on { animation: hit .22s ease-out; }
+
+    .float {
+      position: absolute;
+      z-index: 7;
+      font-weight: 1000;
+      font-size: 22px;
+      pointer-events: none;
+      animation: floatUp .55s ease-out forwards;
+    }
+
+    @keyframes hit {
+      0% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    @keyframes floatUp {
+      0% { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-45px) scale(1.15); }
+    }
+
+    @media (max-width: 400px) {
+      body { padding: 10px 8px; }
+      .arena { min-height: 430px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .float, .flash.on { animation: none; opacity: 0; }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="game-wrap">
+    <div class="top">
+      <div class="stat">
+        <div class="label">Garri</div>
+        <div class="value" id="score">0</div>
+      </div>
+
+      <div class="stat">
+        <div class="label">Time</div>
+        <div class="value" id="time">30</div>
+      </div>
+
+      <div class="stat">
+        <div class="label">Lives</div>
+        <div class="value hearts" id="lives">❤️❤️❤️</div>
+      </div>
+    </div>
+
+    <div class="arena" id="arena" aria-label="GARRI falling game">
+      <div class="flash" id="flash"></div>
+
+      <div class="overlay" id="startOverlay">
+        <div class="panel">
+          <div class="title">🥣 GARRI DROP</div>
+          <div class="sub" style="margin:8px 0 20px">
+            tap the GARRI. don't tap the bombs.
+          </div>
+          <button id="startBtn" type="button">START GAME</button>
+        </div>
+      </div>
+
+      <div class="overlay hidden" id="endOverlay">
+        <div class="panel">
+          <div class="title">GAME OVER</div>
+          <div class="sub" id="endReason" style="margin-top:6px">time's up</div>
+
+          <div style="font-size:46px;font-weight:1000;margin:12px 0 18px" id="finalScore">
+            0
+          </div>
+
+          <div class="sub" style="margin-bottom:18px">GARRI CAUGHT</div>
+
+          <button id="restartBtn" type="button">PLAY AGAIN</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align:center;margin-top:10px;font-size:12px;color:#fff">
+      tap GARRI · avoid 💣 · catch as much GARRI as possible
+    </div>
+  </main>
+
+  <script>
+    /*
+      ============================
+      EASY SETTINGS
+      ============================
+
+      1. Put your real Garri meme image inside:
+         assets/garri.png
+
+      2. Keep this setting as:
+         GARRI_IMAGE: "assets/garri.png"
+
+      3. If you want to use another filename, change it here.
+
+      You can also change:
+      - GAME_TIME
+      - STARTING_LIVES
+      - GAME_BACKGROUND
+    */
+
+    const CONFIG = {
+      GARRI_IMAGE: "assets/garri.png",
+
+      GAME_TIME: 30,
+      STARTING_LIVES: 5,
+
+      // Change this to any CSS color you want.
+      GAME_BACKGROUND: "#9ee914"
+    };
+
+    const arena = document.getElementById("arena");
+    const scoreEl = document.getElementById("score");
+    const timeEl = document.getElementById("time");
+    const livesEl = document.getElementById("lives");
+
+    const startOverlay = document.getElementById("startOverlay");
+    const endOverlay = document.getElementById("endOverlay");
+    const startBtn = document.getElementById("startBtn");
+    const restartBtn = document.getElementById("restartBtn");
+
+    const finalScore = document.getElementById("finalScore");
+    const endReason = document.getElementById("endReason");
+    const flash = document.getElementById("flash");
+
+    arena.style.background = CONFIG.GAME_BACKGROUND;
+
+    let score = 0;
+    let lives = CONFIG.STARTING_LIVES;
+    let timeLeft = CONFIG.GAME_TIME;
+    let running = false;
+
+    let lastTime = 0;
+    let spawnTimer = 0;
+    let animationFrame = 0;
+    let gameTimer = 0;
+
+    const items = new Set();
+
+    function random(min, max) {
+      return min + Math.random() * (max - min);
+    }
+
+    function resetGame() {
+      items.forEach(item => item.el.remove());
+      items.clear();
+
+      score = 0;
+      lives = CONFIG.STARTING_LIVES;
+      timeLeft = CONFIG.GAME_TIME;
+
+      scoreEl.textContent = "0";
+      timeEl.textContent = String(timeLeft);
+      updateLives();
+    }
+
+    function updateLives() {
+      livesEl.textContent =
+        "❤️".repeat(Math.max(0, lives)) || "💀";
+    }
+
+    function startGame() {
+      resetGame();
+
+      running = true;
+      startOverlay.classList.add("hidden");
+      endOverlay.classList.add("hidden");
+
+      lastTime = performance.now();
+      spawnTimer = 0;
+
+      gameTimer = window.setInterval(() => {
+        if (!running) return;
+
+        timeLeft--;
+        timeEl.textContent = String(timeLeft);
+
+        if (timeLeft <= 0) {
+          endGame("time");
+        }
+      }, 1000);
+
+      animationFrame = requestAnimationFrame(gameLoop);
+    }
+
+    function endGame(reason) {
+      if (!running) return;
+
+      running = false;
+
+      clearInterval(gameTimer);
+      cancelAnimationFrame(animationFrame);
+
+      items.forEach(item => item.el.remove());
+      items.clear();
+
+      finalScore.textContent = String(score);
+
+      if (reason === "lives") {
+        endReason.textContent = "you missed too much GARRI 😭";
+      } else {
+        endReason.textContent = "time's up";
+      }
+
+      endOverlay.classList.remove("hidden");
+    }
+
+    function loseLife(x, y) {
+      lives--;
+      updateLives();
+
+      flash.classList.remove("on");
+      void flash.offsetWidth;
+      flash.classList.add("on");
+
+      popText(x, y, "MISS!", "bad");
+
+      if (lives <= 0) {
+        endGame("lives");
+      }
+    }
+
+    function popText(x, y, text, type) {
+      const p = document.createElement("div");
+
+      p.className = "float";
+      p.textContent = text;
+      p.style.left = x + "px";
+      p.style.top = y + "px";
+
+      if (type === "bad") {
+        p.style.color = "#b52f2f";
+      } else {
+        p.style.color = "#fff";
+        p.style.textShadow = "0 2px 4px #000";
+      }
+
+      arena.appendChild(p);
+
+      setTimeout(() => p.remove(), 600);
+    }
+
+    function createGarriImage() {
+      const img = document.createElement("img");
+
+      img.src = CONFIG.GARRI_IMAGE;
+      img.alt = "GARRI";
+
+      // If the image isn't there yet, use the emoji instead.
+      img.addEventListener("error", () => {
+        img.remove();
+      }, { once: true });
+
+      return img;
+    }
+
+    function spawnItem() {
+      const el = document.createElement("div");
+
+      const isGarri = Math.random() < 0.67;
+
+      el.className = "item " + (isGarri ? "garri" : "bad");
+
+      if (isGarri) {
+        const img = createGarriImage();
+        el.appendChild(img);
+
+        // Emoji fallback while you haven't added your image.
+       
+        el.insertBefore(img, el.firstChild);
+      } else {
+        el.textContent = Math.random() < 0.55 ? "💣" : "🪨";
+      }
+
+      const rect = arena.getBoundingClientRect();
+      const size = 62;
+
+      const x = random(
+        4,
+        Math.max(5, rect.width - size - 4)
+      );
+
+      el.style.left = x + "px";
+      el.style.transform =
+        "rotate(" + random(-25, 25) + "deg)";
+
+      arena.appendChild(el);
+
+      const speed =
+        random(150, 230) +
+        (CONFIG.GAME_TIME - timeLeft) * 4;
+
+      const obj = {
+        el,
+        x,
+        y: -70,
+        speed,
+        isGarri,
+        angle: random(-60, 60),
+        spin: random(-90, 90)
+      };
+
+      items.add(obj);
+
+      el.addEventListener("pointerdown", event => {
+        if (!running || !items.has(obj)) return;
+
+        event.preventDefault();
+
+        const arenaRect = arena.getBoundingClientRect();
+
+        const px = event.clientX - arenaRect.left;
+        const py = event.clientY - arenaRect.top;
+
+        if (obj.isGarri) {
+          score++;
+          scoreEl.textContent = String(score);
+
+          popText(
+            px - 10,
+            py - 15,
+            "+1 GARRI",
+            "good"
+          );
+
+          obj.el.remove();
+          items.delete(obj);
+        } else {
+          obj.el.remove();
+          items.delete(obj);
+
+          loseLife(px, py);
+        }
+      });
+    }
+
+    function gameLoop(now) {
+      if (!running) return;
+
+      const delta =
+        Math.min(0.035, (now - lastTime) / 1000);
+
+      lastTime = now;
+      spawnTimer += delta;
+
+      // Gets faster as the game continues.
+      const interval = Math.max(
+        0.22,
+        0.72 -
+          (CONFIG.GAME_TIME - timeLeft) * 0.018
+      );
+
+      if (spawnTimer >= interval) {
+        spawnTimer = 0;
+
+        spawnItem();
+
+        if (timeLeft < 18 && Math.random() < 0.35) {
+          spawnItem();
+        }
+
+        if (timeLeft < 8 && Math.random() < 0.45) {
+          spawnItem();
+        }
+      }
+
+      const arenaHeight = arena.clientHeight;
+
+      for (const obj of [...items]) {
+        obj.y += obj.speed * delta;
+        obj.angle += obj.spin * delta;
+
+        obj.el.style.transform =
+          "translateY(" +
+          obj.y +
+          "px) rotate(" +
+          obj.angle +
+          "deg)";
+
+        if (obj.y > arenaHeight + 30) {
+          obj.el.remove();
+          items.delete(obj);
+
+          // Missing GARRI costs a life.
+          if (obj.isGarri) {
+            loseLife(obj.x, arenaHeight - 40);
+          }
+        }
+      }
+
+      animationFrame = requestAnimationFrame(gameLoop);
+    }
+
+    startBtn.addEventListener("click", startGame);
+    restartBtn.addEventListener("click", startGame);
+  </script>
+</body>
+</html>
