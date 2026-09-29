@@ -263,9 +263,14 @@
   <main class="game-wrap">
     <div class="top">
       <div class="stat">
-        <div class="label">Garri</div>
-        <div class="value" id="score">0</div>
-      </div>
+  <div class="label">Score</div>
+  <div class="value" id="score">0</div>
+</div>
+
+<div class="stat">
+  <div class="labsel">High Score</div>
+  <div class="value" id="highScore">0</div>
+</div>
 
       <div class="stat">
         <div class="label">Time</div>
@@ -354,6 +359,7 @@
 
     const arena = document.getElementById("arena");
     const scoreEl = document.getElementById("score");
+    const highScoreEl = document.getElementById("highScore");
     const timeEl = document.getElementById("time");
     const livesEl = document.getElementById("lives");
 
@@ -385,6 +391,7 @@
     const HIGH_SCORE_KEY = "garri-drop-high-score";
     const MUTE_KEY = "garri-drop-muted";
     let highScore = Number(localStorage.getItem(HIGH_SCORE_KEY) || 0);
+    highScoreEl.textContent = String(highScore);
     let muted = localStorage.getItem(MUTE_KEY) === "1";
     let audioContext = null;
 
@@ -539,6 +546,7 @@
       if (isNewHigh) {
         highScore = score;
         localStorage.setItem(HIGH_SCORE_KEY, String(highScore));
+        highScoreEl.textContent = String(highScore);
       }
 
       newHigh.classList.toggle("hidden", !isNewHigh);
