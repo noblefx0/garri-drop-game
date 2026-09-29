@@ -24,7 +24,25 @@
       display: flex;
       gap: 8px;
       margin-bottom: 10px;
+      align-items: stretch;
     }
+
+    .sound-toggle {
+      flex: 0 0 52px;
+      border: 2px solid #111;
+      border-radius: 14px;
+      background: #fff;
+      color: #111;
+      padding: 0;
+      font-size: 21px;
+      line-height: 1;
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sound-toggle:active { transform: scale(.96); }
 
     .stat {
       flex: 1;
@@ -57,7 +75,7 @@
       aspect-ratio: 9 / 14;
       min-height: 440px;
       max-height: 650px;
-      background: #0b7a3b;
+      background: #9ee914;
       border: 3px solid #111;
       border-radius: 22px;
       touch-action: manipulation;
@@ -148,8 +166,46 @@
     button:hover { transform: translateY(-1px); }
     button:focus-visible { outline: 3px solid #0b7a3b; outline-offset: 3px; }
 
-    .hidden { display: none; }
+    .hidden { display: none !important; }
     .hearts { letter-spacing: 2px; }
+
+    .game-over-splash {
+      position: absolute;
+      inset: 0;
+      z-index: 12;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      background: rgba(255, 0, 0, .10);
+    }
+
+    .game-over-splash .game-over-text {
+      color: #e00000;
+      font-size: clamp(42px, 12vw, 76px);
+      font-weight: 1000;
+      letter-spacing: -.06em;
+      text-shadow: 0 4px 0 #111, 0 0 22px rgba(255,255,255,.7);
+      transform: scale(1.55);
+      filter: blur(12px);
+      opacity: 0;
+      animation: gameOverIn .8s cubic-bezier(.2,.8,.2,1) forwards;
+    }
+
+    .new-high {
+      color: #e00000;
+      font-weight: 1000;
+      font-size: 16px;
+      margin-top: -8px;
+      margin-bottom: 12px;
+      animation: pulseHigh .8s ease-in-out infinite alternate;
+    }
+
+    button:disabled {
+      opacity: .45;
+      cursor: default;
+      transform: none !important;
+    }
 
     .flash {
       position: absolute;
@@ -181,6 +237,17 @@
       100% { opacity: 0; transform: translateY(-45px) scale(1.15); }
     }
 
+    @keyframes gameOverIn {
+      0% { opacity: 0; transform: scale(1.7); filter: blur(14px); }
+      55% { opacity: 1; transform: scale(.92); filter: blur(0); }
+      100% { opacity: 1; transform: scale(1); filter: blur(0); }
+    }
+
+    @keyframes pulseHigh {
+      from { transform: scale(1); }
+      to { transform: scale(1.06); }
+    }
+
     @media (max-width: 400px) {
       body { padding: 10px 8px; }
       .arena { min-height: 430px; }
@@ -207,8 +274,10 @@
 
       <div class="stat">
         <div class="label">Lives</div>
-        <div class="value hearts" id="lives">❤️❤️❤️</div>
+        <div class="value hearts" id="lives">❤️❤️❤️❤️❤️</div>
       </div>
+
+      <button class="sound-toggle" id="soundToggle" type="button" aria-label="Mute sound" title="Mute sound">🔊</button>
     </div>
 
     <div class="arena" id="arena" aria-label="GARRI falling game">
@@ -224,18 +293,24 @@
         </div>
       </div>
 
+      <div class="game-over-splash hidden" id="gameOverSplash" aria-hidden="true">
+        <div class="game-over-text">GAME OVER</div>
+      </div>
+
       <div class="overlay hidden" id="endOverlay">
         <div class="panel">
           <div class="title">GAME OVER</div>
           <div class="sub" id="endReason" style="margin-top:6px">time's up</div>
 
-          <div style="font-size:46px;font-weight:1000;margin:12px 0 18px" id="finalScore">
+          <div style="font-size:46px;font-weight:1000;margin:12px 0 10px" id="finalScore">
             0
           </div>
 
+          <div class="new-high hidden" id="newHigh">NEW HIGH SCORE!</div>
+
           <div class="sub" style="margin-bottom:18px">GARRI CAUGHT</div>
 
-          <button id="restartBtn" type="button">PLAY AGAIN</button>
+          <button id="restartBtn" type="button" disabled>PLAY AGAIN</button>
         </div>
       </div>
     </div>
@@ -263,6 +338,8 @@
       - GAME_TIME
       - STARTING_LIVES
       - GAME_BACKGROUND
+
+      Sound, mute, high score and game-over effects are handled automatically below.
     */
 
     const CONFIG = {
@@ -284,9 +361,12 @@
     const endOverlay = document.getElementById("endOverlay");
     const startBtn = document.getElementById("startBtn");
     const restartBtn = document.getElementById("restartBtn");
+    const soundToggle = document.getElementById("soundToggle");
 
     const finalScore = document.getElementById("finalScore");
     const endReason = document.getElementById("endReason");
+    const newHigh = document.getElementById("newHigh");
+    const gameOverSplash = document.getElementById("gameOverSplash");
     const flash = document.getElementById("flash");
 
     arena.style.background = CONFIG.GAME_BACKGROUND;
@@ -300,8 +380,89 @@
     let spawnTimer = 0;
     let animationFrame = 0;
     let gameTimer = 0;
+    let ending = false;
+
+    const HIGH_SCORE_KEY = "garri-drop-high-score";
+    const MUTE_KEY = "garri-drop-muted";
+    let highScore = Number(localStorage.getItem(HIGH_SCORE_KEY) || 0);
+    let muted = localStorage.getItem(MUTE_KEY) === "1";
+    let audioContext = null;
 
     const items = new Set();
+
+    function updateSoundButton() {
+      soundToggle.textContent = muted ? "🔇" : "🔊";
+      soundToggle.setAttribute("aria-label", muted ? "Unmute sound" : "Mute sound");
+      soundToggle.title = muted ? "Unmute sound" : "Mute sound";
+    }
+
+    function getAudioContext() {
+      if (muted) return null;
+
+      if (!audioContext) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return null;
+        audioContext = new AudioCtx();
+      }
+
+      if (audioContext.state === "suspended") {
+        audioContext.resume().catch(() => {});
+      }
+
+      return audioContext;
+    }
+
+    function playSound(type) {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      if (type === "catch") {
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(520, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + .09);
+        gain.gain.setValueAtTime(.0001, now);
+        gain.gain.exponentialRampToValueAtTime(.16, now + .01);
+        gain.gain.exponentialRampToValueAtTime(.0001, now + .12);
+        osc.start(now);
+        osc.stop(now + .13);
+      } else if (type === "bad") {
+        osc.type = "square";
+        osc.frequency.setValueAtTime(120, now);
+        osc.frequency.exponentialRampToValueAtTime(70, now + .16);
+        gain.gain.setValueAtTime(.0001, now);
+        gain.gain.exponentialRampToValueAtTime(.12, now + .01);
+        gain.gain.exponentialRampToValueAtTime(.0001, now + .18);
+        osc.start(now);
+        osc.stop(now + .19);
+      } else if (type === "miss") {
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(330, now);
+        osc.frequency.exponentialRampToValueAtTime(120, now + .24);
+        gain.gain.setValueAtTime(.0001, now);
+        gain.gain.exponentialRampToValueAtTime(.10, now + .01);
+        gain.gain.exponentialRampToValueAtTime(.0001, now + .25);
+        osc.start(now);
+        osc.stop(now + .26);
+      } else if (type === "gameover") {
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(260, now);
+        osc.frequency.exponentialRampToValueAtTime(55, now + .65);
+        gain.gain.setValueAtTime(.0001, now);
+        gain.gain.exponentialRampToValueAtTime(.16, now + .03);
+        gain.gain.exponentialRampToValueAtTime(.0001, now + .7);
+        osc.start(now);
+        osc.stop(now + .72);
+      }
+    }
+
+    updateSoundButton();
 
     function random(min, max) {
       return min + Math.random() * (max - min);
@@ -318,6 +479,10 @@
       scoreEl.textContent = "0";
       timeEl.textContent = String(timeLeft);
       updateLives();
+      newHigh.classList.add("hidden");
+      restartBtn.disabled = true;
+      gameOverSplash.classList.add("hidden");
+      ending = false;
     }
 
     function updateLives() {
@@ -326,6 +491,7 @@
     }
 
     function startGame() {
+      getAudioContext();
       resetGame();
 
       running = true;
@@ -350,9 +516,10 @@
     }
 
     function endGame(reason) {
-      if (!running) return;
+      if (!running || ending) return;
 
       running = false;
+      ending = true;
 
       clearInterval(gameTimer);
       cancelAnimationFrame(animationFrame);
@@ -368,7 +535,31 @@
         endReason.textContent = "time's up";
       }
 
-      endOverlay.classList.remove("hidden");
+      const isNewHigh = score > highScore;
+      if (isNewHigh) {
+        highScore = score;
+        localStorage.setItem(HIGH_SCORE_KEY, String(highScore));
+      }
+
+      newHigh.classList.toggle("hidden", !isNewHigh);
+      endOverlay.classList.add("hidden");
+      gameOverSplash.classList.remove("hidden");
+      void gameOverSplash.offsetWidth;
+
+      playSound("gameover");
+
+      // Keep the final screen locked briefly so a rapid last tap cannot
+      // accidentally hit PLAY AGAIN.
+      window.setTimeout(() => {
+        if (!ending) return;
+        gameOverSplash.classList.add("hidden");
+        endOverlay.classList.remove("hidden");
+
+        window.setTimeout(() => {
+          if (!ending) return;
+          restartBtn.disabled = false;
+        }, 450);
+      }, 950);
     }
 
     function loseLife(x, y) {
@@ -380,6 +571,7 @@
       flash.classList.add("on");
 
       popText(x, y, "MISS!", "bad");
+      playSound("miss");
 
       if (lives <= 0) {
         endGame("lives");
@@ -430,10 +622,6 @@
       if (isGarri) {
         const img = createGarriImage();
         el.appendChild(img);
-
-        // Emoji fallback while you haven't added your image.
-       
-        el.insertBefore(img, el.firstChild);
       } else {
         el.textContent = Math.random() < 0.55 ? "💣" : "🪨";
       }
@@ -488,6 +676,7 @@
             "+1 GARRI",
             "good"
           );
+          playSound("catch");
 
           obj.el.remove();
           items.delete(obj);
@@ -495,6 +684,7 @@
           obj.el.remove();
           items.delete(obj);
 
+          playSound("bad");
           loseLife(px, py);
         }
       });
@@ -557,8 +747,22 @@
       animationFrame = requestAnimationFrame(gameLoop);
     }
 
+    soundToggle.addEventListener("click", () => {
+      muted = !muted;
+      localStorage.setItem(MUTE_KEY, muted ? "1" : "0");
+      updateSoundButton();
+
+      if (!muted) {
+        getAudioContext();
+        playSound("catch");
+      }
+    });
+
     startBtn.addEventListener("click", startGame);
-    restartBtn.addEventListener("click", startGame);
+    restartBtn.addEventListener("click", () => {
+      if (restartBtn.disabled) return;
+      startGame();
+    });
   </script>
 </body>
 </html>
